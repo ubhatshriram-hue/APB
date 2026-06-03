@@ -1,0 +1,99 @@
+module  apb_master(PCLK,PRESETn,PADDR,READ_WRITE,PSEL1,PSEL2,TRANSFER,PENABLE,PWRITE,PW_DATA,APB_WRITE_PADDR,APB_WRITE_DATA,APB_READ_PADDR,APB_READ_DATA_OUT,PREADY,PSLVERR,PR_DATA);
+input wire PCLK,PRESETn,TRANSFER;
+input wire PREADY,PSLVERR;
+input wire [7:0]PR_DATA;
+input wire READ_WRITE;
+input wire [8:0]APB_WRITE_PADDR,APB_READ_PADDR;
+input wire [7:0]APB_WRITE_DATA;
+output reg PSEL1,PSEL2,PWRITE;
+output reg PENABLE;
+output wire  [7:0]APB_READ_DATA_OUT;
+output reg [7:0]PW_DATA;
+output reg [8:0]PADDR;
+
+parameter IDLE=2'b00;
+parameter SETUP=2'b01;
+parameter ACCESS=2'b10;
+reg [1:0]c_st,n_st;
+always@(posedge PCLK or negedge PRESETn)
+begin
+if(!PRESETn)
+c_st<=IDLE;
+else
+c_st<=n_st;
+end
+always@(*)
+begin
+case(c_st)
+IDLE:begin
+        if(TRANSFER)
+            n_st=SETUP;
+        else
+            n_st=IDLE;
+     end
+SETUP:begin
+        n_st=ACCESS;
+      end
+ACESS:begin
+        if(PREADY && PSLVERR  )
+            n_st=IDLE;
+        else if(PREADY && !PSLVERR )
+             n_st=(TRANSFER)?SETUP:IDLE;
+        else
+            n_st=ACCESS;
+      end
+default:n_st=IDLE;
+endcase
+end
+  assign APB_READ_DATA_OUT= (c_st==ACCESS &&PREADY &&!PSLVERR &&READ_WRITE)?PR_DATA:APB_READ_DATA_OUT;
+
+
+always @(*)
+begin
+PSEL1=0;
+PSEL2=0;
+PADDR=9'd0;
+PWRITE=0;
+PW_DATA=8'd0;
+PENABLE=0;
+case(c_st)
+SETUP:begin
+        PENABLE=0;
+        if(!READ_WRITE)
+           begin
+            PADDR=APB_WRITE_PADDR;
+            PSEL1=(APB_WRITE_PADDR[8]==0);
+            PSEL2=(APB_WRITE_PADDR[8]==1);
+            PW_DATA=APB_WRITE_DATA;
+            PWRITE=1;
+           end
+        else
+           begin
+            PADDR=APB_READ_PADDR;
+            PSEL1=(APB_READ_PADDR[8]==0);
+            PSEL2=(APB_READ_PADDR[8]==1);
+            PWRITE=0;
+          end
+       end
+ACCESS:begin
+        PENABLE=1;
+         if(!READ_WRITE)
+           begin
+            PADDR=APB_WRITE_PADDR;
+            PSEL1=(APB_WRITE_PADDR[8]==0);
+            PSEL2=(APB_WRITE_PADDR[8]==1);
+            PW_DATA=APB_WRITE_DATA;
+            PWRITE=1;
+           end
+        else
+           begin
+            PADDR=APB_READ_PADDR;
+            PSEL1=(APB_READ_PADDR[8]==0);
+            PSEL2=(APB_READ_PADDR[8]==1);
+            PWRITE=0;
+          end
+       end
+endcase
+end
+endmodule
+
